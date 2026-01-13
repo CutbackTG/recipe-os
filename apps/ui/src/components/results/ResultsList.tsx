@@ -1,4 +1,3 @@
-import React from "react";
 import type { SearchItem } from "../../types/search";
 
 export function ResultsList(props: {

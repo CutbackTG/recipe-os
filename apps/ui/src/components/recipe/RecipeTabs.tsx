@@ -1,4 +1,3 @@
-import React from "react";
 import { Tabs } from "../ui/Tabs";
 
 export type RecipeTabKey = "preview" | "builder" | "specs" | "versions";

@@ -1,5 +1,3 @@
-import React from "react";
-
 export type Tab = { key: string; label: string };
 
 export function Tabs(props: {

@@ -1,4 +1,3 @@
-import React from "react";
 import type { RecipePreview as Preview } from "../../types/recipe";
 
 function fmtNum(n: number | null | undefined, digits = 1) {
