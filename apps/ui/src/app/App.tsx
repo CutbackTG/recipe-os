@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { GlobalSearchBar } from "../components/search/GlobalSearchBar";
 import { TypeaheadDropdown } from "../components/search/TypeaheadDropdown";
 import { ResultsList } from "../components/results/ResultsList";
@@ -15,9 +15,30 @@ import type { TypeaheadItem, SearchItem } from "../types/search";
 const DEFAULT_TENANT = "demo";
 const DEFAULT_SITE = "default";
 
+type Theme = "dark" | "light";
+
+function loadTheme(): Theme {
+  try {
+    const v = localStorage.getItem("recipeos_theme");
+    return v === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
 export default function App() {
   const [tenantId] = useState(DEFAULT_TENANT);
   const [siteId] = useState(DEFAULT_SITE);
+
+  const [theme, setTheme] = useState<Theme>(() => loadTheme());
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("recipeos_theme", theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
 
   const [q, setQ] = useState("");
   const qDebounced = useDebouncedValue(q, 180);
@@ -58,8 +79,12 @@ export default function App() {
     setTypeaheadOpen(false);
   }
 
+  function toggleTheme() {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }
+
   return (
-    <div className="container">
+    <div className={`container ${theme === "light" ? "theme-light" : ""}`}>
       <div className="topbar">
         <div className="brand">
           <div className="logo" />
@@ -78,7 +103,6 @@ export default function App() {
             }}
             onSubmit={() => {
               setTypeaheadOpen(false);
-              // If user presses enter and there is a top typeahead result, pick it
               const first = ta.items?.[0];
               if (first) pickItem(first);
             }}
@@ -97,6 +121,11 @@ export default function App() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <span className="pill">{tenantId}</span>
           <span className="pill">{siteId}</span>
+
+          <button className="btn" onClick={toggleTheme} title="Toggle light/dark mode">
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+
           <button className="btn btnPrimary">+ New Recipe</button>
         </div>
       </div>
@@ -120,10 +149,7 @@ export default function App() {
                   {selectedFromResults?.code ? `• ${selectedFromResults.code}` : ""}
                 </span>
               </h2>
-              <RecipeTabs
-                active={activeTab}
-                onChange={(k) => setActiveTab(k)}
-              />
+              <RecipeTabs active={activeTab} onChange={(k) => setActiveTab(k)} />
             </div>
           </div>
 
@@ -137,11 +163,7 @@ export default function App() {
           )}
 
           {activeTab === "builder" && (
-            <RecipeBuilder
-              data={draft.data}
-              loading={draft.loading}
-              error={draft.error}
-            />
+            <RecipeBuilder data={draft.data} loading={draft.loading} error={draft.error} />
           )}
 
           {activeTab === "specs" && (
