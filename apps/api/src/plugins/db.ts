@@ -1,19 +1,21 @@
+import fp from "fastify-plugin";
 import type { FastifyInstance } from "fastify";
-import pg from "pg";
+import { Pool } from "pg";
 
 declare module "fastify" {
   interface FastifyInstance {
-    db: pg.Pool;
+    db: Pool;
   }
 }
 
-export async function dbPlugin(app: FastifyInstance) {
+export default fp(async (app: FastifyInstance) => {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL missing");
-  const pool = new pg.Pool({ connectionString: url });
+
+  const pool = new Pool({ connectionString: url });
   app.decorate("db", pool);
 
   app.addHook("onClose", async () => {
     await pool.end();
   });
-}
+});

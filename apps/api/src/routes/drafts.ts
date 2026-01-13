@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { LineItemsBulkSchema, ComputeDraftSchema } from "@hg2/shared";
 
 type DraftParams = { id: string };
@@ -10,8 +10,8 @@ export async function draftRoutes(app: FastifyInstance) {
     "/drafts/:id/line-items",
     { preHandler: app.requireAuth },
     async (req, reply) => {
-
       const draftId = req.params.id;
+
       const parsed = LineItemsBulkSchema.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
@@ -26,7 +26,10 @@ export async function draftRoutes(app: FastifyInstance) {
             `insert into recipe_line_item (tenant_id, draft_id, ingredient_id, pct, note)
              values ($1, $2::uuid, $3::uuid, $4, $5)
              on conflict (draft_id, ingredient_id)
-             do update set pct = excluded.pct, note = excluded.note, updated_at = now()`,
+             do update set
+               pct = excluded.pct,
+               note = excluded.note,
+               updated_at = now()`,
             [tenant_id, draftId, it.ingredient_id, it.pct, it.note ?? null]
           );
         }
@@ -47,8 +50,8 @@ export async function draftRoutes(app: FastifyInstance) {
     "/drafts/:id/compute",
     { preHandler: app.requireAuth },
     async (req, reply) => {
-
       const draftId = req.params.id;
+
       const parsed = ComputeDraftSchema.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
@@ -74,9 +77,9 @@ export async function draftRoutes(app: FastifyInstance) {
 
       const rows = r.rows as Array<{
         pct: string;
-        cost_per_kg: string;
-        protein_g_per_100g: string;
-        sugar_g_per_100g: string;
+        cost_per_kg: string | null;
+        protein_g_per_100g: string | null;
+        sugar_g_per_100g: string | null;
       }>;
 
       // Compute: treat pct as “g per 100g of product”
@@ -106,7 +109,9 @@ export async function draftRoutes(app: FastifyInstance) {
         sugar_g_per_100g: Number(sugarPer100g.toFixed(6))
       };
 
-      await app.redis.setEx(cacheKey, 5, JSON.stringify(payload)); // tiny TTL for “live” feel
+      // tiny TTL for “live” feel
+      await app.redis.setEx(cacheKey, 5, JSON.stringify(payload));
+
       return reply.send(payload);
     }
   );

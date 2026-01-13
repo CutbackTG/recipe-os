@@ -1,5 +1,0 @@
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "../apps/worker/dist" },
-  "include": ["../apps/worker/src"]
-}

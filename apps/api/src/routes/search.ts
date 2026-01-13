@@ -1,22 +1,20 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { SearchQuerySchema } from "@hg2/shared";
 
 /**
  * GET /search?q=...&tenant_id=...&site_id=...&types=ingredient,recipe
  *
- * Protected endpoint (Okta session cookie). Requires user to be logged in.
- * Uses Redis for a short-lived cache to keep typeahead snappy.
- * Uses OpenSearch for ingredient search (recipes will be added later).
+ * Requires auth (Okta in prod, bypass in dev if AUTH_MODE=none).
+ * Uses Redis for short-lived caching.
+ * Uses OpenSearch for ingredient search (recipes can be added later).
  */
 export async function searchRoutes(app: FastifyInstance) {
   app.get(
     "/search",
     { preHandler: app.requireAuth },
-    async (req: FastifyRequest, reply) => {
+    async (req, reply) => {
       const parsed = SearchQuerySchema.safeParse(req.query);
-      if (!parsed.success) {
-        return reply.code(400).send(parsed.error.flatten());
-      }
+      if (!parsed.success) return reply.code(400).send(parsed.error.flatten());
 
       const { q, tenant_id, site_id, types } = parsed.data;
 
@@ -24,18 +22,22 @@ export async function searchRoutes(app: FastifyInstance) {
       const normTypes = (types ?? ["ingredient", "recipe"]).join("|");
 
       const cacheKey = `search:${tenant_id}:${site_id}:${normTypes}:${normQ}`;
+
+      // Cache (redis shim exists even if Redis disabled)
       const cached = await app.redis.get(cacheKey);
-      if (cached) {
-        return reply.send(JSON.parse(cached));
+      if (cached) return reply.send(JSON.parse(cached));
+
+      // OpenSearch may be disabled/unavailable in local dev
+      if (!app.os) {
+        return reply.code(503).send({ error: "opensearch unavailable" });
       }
 
       const results: any[] = [];
 
-      // --- Ingredients (OpenSearch) ---
-      if ((types ?? []).includes("ingredient")) {
+      // Ingredients
+      const want = new Set(types ?? ["ingredient", "recipe"]);
+      if (want.has("ingredient")) {
         const idx = process.env.OPENSEARCH_INDEX_INGREDIENTS ?? "ingredients_v1";
-
-        // OpenSearch JS client typings can be awkward; use a local any cast for now.
         const os: any = app.os;
 
         const r = await os.search({
@@ -57,27 +59,26 @@ export async function searchRoutes(app: FastifyInstance) {
           }
         });
 
+        // Different client versions return different shapes; support both
         const hitsRaw = r?.body?.hits?.hits ?? r?.hits?.hits ?? [];
 
-        const hits = hitsRaw.map((h: any) => ({
-          type: "ingredient",
-          score: h?._score ?? 0,
-          ...h?._source
-        }));
-
-        results.push(...hits);
+        results.push(
+          ...hitsRaw.map((h: any) => ({
+            type: "ingredient",
+            score: h?._score ?? 0,
+            ...h?._source
+          }))
+        );
       }
 
-      // --- Recipes (stub for later) ---
-      // We'll add recipes_v1 index and merge results here.
-      // if ((types ?? []).includes("recipe")) { ... }
+      // Recipes: add later (recipes_v1 index + mapping)
+      // if (want.has("recipe")) { ... }
 
-      // Sort mixed results by score desc (works for future multi-type search)
       results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
       const payload = { q, tenant_id, site_id, results };
 
-      // Short TTL so results stay fresh while typing
+      // Short TTL for typeahead feel
       await app.redis.setEx(cacheKey, 10, JSON.stringify(payload));
 
       return reply.send(payload);
