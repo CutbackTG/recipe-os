@@ -10,7 +10,7 @@ designed for large, multi-site food & beverage organisations.
 - Enterprise-grade auditability and versioning
 
 ## Status
-🚧 Early development – internal prototype
+Early development – internal prototype
 
 ## Tech (initial)
 - Node.js + TypeScript

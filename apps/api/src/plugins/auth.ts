@@ -5,6 +5,7 @@ import helmet from "@fastify/helmet";
 import { randomBytes, createHash } from "node:crypto";
 import { request } from "undici";
 import { jwtVerify, createRemoteJWKSet } from "jose";
+import { RedisStore } from "connect-redis";
 
 declare module "fastify" {
   interface Session {
@@ -73,17 +74,26 @@ export async function authPlugin(app: FastifyInstance) {
 
   await app.register(cookie, { secret: SESSION_SECRET });
 
-  await app.register(session, {
-    secret: SESSION_SECRET,
-    cookieName: "__Host-recipeos",
-    cookie: {
-      secure: cookieSecure,
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/"
-    },
-    saveUninitialized: false
-  });
+  const sessionTtl = Number(process.env.SESSION_TTL_SECONDS ?? 28800);
+
+const redisStore = new RedisStore({
+  client: app.redis as any,
+  ttl: sessionTtl
+});
+
+await app.register(session, {
+  secret: SESSION_SECRET,
+  store: redisStore,
+  cookieName: "__Host-recipeos",
+  cookie: {
+    secure: cookieSecure,
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/"
+  },
+  saveUninitialized: false
+});
+
 
   // JWKS for verifying ID tokens
   const jwks = createRemoteJWKSet(new URL(`${OKTA_ISSUER}/v1/keys`));
