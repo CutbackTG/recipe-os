@@ -4,15 +4,14 @@ import { SearchQuerySchema } from "@hg2/shared";
 /**
  * GET /search?q=...&tenant_id=...&site_id=...&types=ingredient,recipe
  *
- * Notes:
- * - We use OpenSearch for ingredient search.
- * - We deliberately cast the OpenSearch client to `any` to avoid TS overload issues
- *   in the OpenSearch JS client typings (we can tighten later).
- * - Redis cache TTL is short to keep "typeahead" fast.
+ * Protected endpoint (Okta session cookie). Requires user to be logged in.
+ * Uses Redis for a short-lived cache to keep typeahead snappy.
+ * Uses OpenSearch for ingredient search (recipes will be added later).
  */
 export async function searchRoutes(app: FastifyInstance) {
   app.get(
     "/search",
+    { preHandler: app.requireAuth },
     async (req: FastifyRequest, reply) => {
       const parsed = SearchQuerySchema.safeParse(req.query);
       if (!parsed.success) {
@@ -32,11 +31,13 @@ export async function searchRoutes(app: FastifyInstance) {
 
       const results: any[] = [];
 
-      // ---------- INGREDIENT SEARCH ----------
+      // --- Ingredients (OpenSearch) ---
       if ((types ?? []).includes("ingredient")) {
         const idx = process.env.OPENSEARCH_INDEX_INGREDIENTS ?? "ingredients_v1";
 
-        const os: any = app.os; // bypass OpenSearch typings quirks
+        // OpenSearch JS client typings can be awkward; use a local any cast for now.
+        const os: any = app.os;
+
         const r = await os.search({
           index: idx,
           body: {
@@ -67,16 +68,16 @@ export async function searchRoutes(app: FastifyInstance) {
         results.push(...hits);
       }
 
-      // ---------- RECIPE SEARCH (stub for now) ----------
-      // We'll add recipes_v1 later and merge results here.
+      // --- Recipes (stub for later) ---
+      // We'll add recipes_v1 index and merge results here.
       // if ((types ?? []).includes("recipe")) { ... }
 
-      // Sort mixed results by score desc
+      // Sort mixed results by score desc (works for future multi-type search)
       results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
       const payload = { q, tenant_id, site_id, results };
 
-      // Short TTL so the typeahead stays fresh
+      // Short TTL so results stay fresh while typing
       await app.redis.setEx(cacheKey, 10, JSON.stringify(payload));
 
       return reply.send(payload);

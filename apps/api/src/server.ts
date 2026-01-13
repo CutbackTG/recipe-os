@@ -4,10 +4,13 @@ import { redisPlugin } from "./plugins/redis.js";
 import { opensearchPlugin } from "./plugins/opensearch.js";
 import { searchRoutes } from "./routes/search.js";
 import { ingredientRoutes } from "./routes/ingredients.js";
+import { authPlugin } from "./plugins/auth.js";
+
 
 const app = Fastify({ logger: true });
 
 await app.register(dbPlugin);
+await app.register(authPlugin);
 await app.register(redisPlugin);
 await app.register(opensearchPlugin);
 

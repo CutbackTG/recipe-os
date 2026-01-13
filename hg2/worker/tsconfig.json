@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "../../recipe-os/worker/dist" },
+  "include": ["../../recipe-os/worker/src"]
+}
